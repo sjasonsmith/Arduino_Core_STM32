@@ -377,11 +377,10 @@ void SoftwareSerial::begin(long speed)
   if (!_half_duplex) {
     setTX();
     setRX();
+    listen();
   } else {
     setTX();
   }
-
-  listen();
 }
 
 void SoftwareSerial::end()
