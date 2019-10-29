@@ -36,10 +36,11 @@
 //
 #include "SoftwareSerial.h"
 
-#define OVERSAMPLE 3 // in RX, Timer will generate interruption OVERSAMPLE time during a bit. Thus OVERSAMPLE ticks in a bit. (interrupt not synchonized with edge).
+#define OVERSAMPLE 3 // in RX, Timer will generate interrupts OVERSAMPLE times during a bit. Thus OVERSAMPLE ticks in a bit. (interrupt not synchonized with edge).
 
 // defined in bit-periods
 #define HALFDUPLEX_SWITCH_DELAY 5
+
 // It's best to define TIMER_SERIAL in variant.h. If not defined, we choose one here
 // The order is based on (lack of) features and compare channels, we choose the simplest available
 // because we only need an update interrupt
@@ -121,7 +122,7 @@ void SoftwareSerial::setSpeed(uint32_t speed)
       // Get timer clock
       clock_rate = timer.getTimerClkFreq();
       int pre = 1;
-      // Calculate prescale an compare value
+      // Calculate prescale and compare value
       do {
         cmp_value = clock_rate / (speed * OVERSAMPLE);
         if (cmp_value >= UINT16_MAX) {
@@ -216,7 +217,7 @@ inline void SoftwareSerial::setRXTX(bool input)
 inline void SoftwareSerial::send()
 {
   if (--tx_tick_cnt <= 0) { // if tx_tick_cnt > 0 interrupt is discarded. Only when tx_tick_cnt reach 0 we set TX pin.
-    if (tx_bit_cnt++ < 10) { // tx_bit_cnt < 10 transmission is not fiisehed (10 = 1 start +8 bits + 1 stop)
+    if (tx_bit_cnt++ < 10) { // tx_bit_cnt < 10 transmission is not finished (10 = 1 start + 8 bits + 1 stop)
       // send data (including start and stop bits)
       if (tx_buffer & 1) {
         LL_GPIO_SetOutputPin(_transmitPinPort, _transmitPinNumber);
@@ -253,10 +254,10 @@ inline void SoftwareSerial::recv()
       if (!inbit) {
         // got start bit
         rx_bit_cnt = 0; // rx_bit_cnt == 0 : start bit received
-        rx_tick_cnt = OVERSAMPLE + 1; // Wait 1 bit (OVERSAMPLE ticks) + 1 tick in order to sample RX pin in the middle of the edge (and not too close to the edge)
+        rx_tick_cnt = OVERSAMPLE + 1; // Wait 1 bit (OVERSAMPLE ticks) + 1 tick in order to sample RX pin in the middle of the bit (and not too close to the edge)
         rx_buffer = 0;
       } else {
-        rx_tick_cnt = 1; // Waiting for start bit, but we don't get right level. Wait for next Interrupt to ckech RX pin level
+        rx_tick_cnt = 1; // Waiting for start bit, but we don't get right level. Wait for next Interrupt to check RX pin level
       }
     } else if (rx_bit_cnt >= 8) { // rx_bit_cnt >= 8 : waiting for stop bit
       if (inbit) {
@@ -270,7 +271,7 @@ inline void SoftwareSerial::recv()
           _buffer_overflow = true;
         }
       }
-      // Full trame received. Resart wainting for sart bit at next interrupt
+      // Full frame received. Restart waiting for start bit at next interrupt
       rx_tick_cnt = 1;
       rx_bit_cnt = -1;
     } else {
@@ -279,7 +280,7 @@ inline void SoftwareSerial::recv()
       if (inbit) {
         rx_buffer |= 0x80;
       }
-      rx_bit_cnt++; // Preprare for next bit
+      rx_bit_cnt++; // Prepare for next bit
       rx_tick_cnt = OVERSAMPLE; // Wait OVERSAMPLE ticks before sampling next bit
     }
   }
