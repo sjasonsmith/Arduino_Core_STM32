@@ -37,6 +37,7 @@
 #include "SoftwareSerial.h"
 
 #define OVERSAMPLE 3 // in RX, Timer will generate interrupts OVERSAMPLE times during a bit. Thus OVERSAMPLE ticks in a bit. (interrupt not synchonized with edge).
+#define INTERRUPT_PRIORITY 0
 
 // defined in bit-periods
 #define HALFDUPLEX_SWITCH_DELAY 5
@@ -93,6 +94,10 @@
 #error No suitable timer found for SoftwareSerial, define TIMER_SERIAL in variant.h
 #endif
 #endif
+
+#define _SW_SERIAL_TIMER_IRQ(X) X##_IRQn
+#define SW_SERIAL_TIMER_IRQ _SW_SERIAL_TIMER_IRQ(TIMER_SERIAL)
+
 //
 // Statics
 //
@@ -134,6 +139,7 @@ void SoftwareSerial::setSpeed(uint32_t speed)
       timer.setOverflow(cmp_value);
       timer.setCount(0);
       timer.attachInterrupt(&handleInterrupt);
+      NVIC_SetPriority(SW_SERIAL_TIMER_IRQ, NVIC_EncodePriority(0, INTERRUPT_PRIORITY, 0));
       timer.resume();
     } else {
       timer.detachInterrupt();
