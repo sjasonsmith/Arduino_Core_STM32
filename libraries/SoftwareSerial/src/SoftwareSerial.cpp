@@ -37,71 +37,91 @@
 #include "SoftwareSerial.h"
 
 #define OVERSAMPLE 3 // in RX, Timer will generate interrupts OVERSAMPLE times during a bit. Thus OVERSAMPLE ticks in a bit. (interrupt not synchonized with edge).
-#define INTERRUPT_PRIORITY 0
+
+// Override IRQ preempt priority, if needed
+#ifndef SW_SERIAL_INT_PREEMPT_PRIORITY
+   #define SW_SERIAL_INT_PREEMPT_PRIORITY 0
+#endif
 
 // defined in bit-periods
 #define HALFDUPLEX_SWITCH_DELAY 5
 
+#ifdef SW_SERIAL_TIMER
+#error SW_SERIAL_TIMER must not be defined outside of SoftwareSerial.h
+#endif
+
+#ifdef TIMER_SERIAL
+#error TIMER_SERIAL is deprecated, prefer SW_SERIAL_TIMER_NUM. Interrupt priority will not be adjusted when using TIMER_SERIAL.
+#define SW_SERIAL_TIMER TIMER_SERIAL
+#endif
+
 // It's best to define TIMER_SERIAL in variant.h. If not defined, we choose one here
 // The order is based on (lack of) features and compare channels, we choose the simplest available
 // because we only need an update interrupt
-#if !defined(TIMER_SERIAL)
+#if !defined(SW_SERIAL_TIMER_NUM)
 #if defined (TIM18_BASE)
-#define TIMER_SERIAL TIM18
+#define SW_SERIAL_TIMER_NUM 18
 #elif defined (TIM7_BASE)
-#define TIMER_SERIAL TIM7
+#define SW_SERIAL_TIMER_NUM 7
 #elif defined (TIM6_BASE)
-#define TIMER_SERIAL TIM6
+#define SW_SERIAL_TIMER_NUM 6
 #elif defined (TIM22_BASE)
-#define TIMER_SERIAL TIM22
+#define SW_SERIAL_TIMER_NUM 22
 #elif defined (TIM21_BASE)
-#define TIMER_SERIAL TIM21
+#define SW_SERIAL_TIMER_NUM 21
 #elif defined (TIM17_BASE)
-#define TIMER_SERIAL TIM17
+#define SW_SERIAL_TIMER_NUM 17
 #elif defined (TIM16_BASE)
-#define TIMER_SERIAL TIM16
+#define SW_SERIAL_TIMER_NUM 16
 #elif defined (TIM15_BASE)
-#define TIMER_SERIAL TIM15
+#define SW_SERIAL_TIMER_NUM 15
 #elif defined (TIM14_BASE)
-#define TIMER_SERIAL TIM14
+#define SW_SERIAL_TIMER_NUM 14
 #elif defined (TIM13_BASE)
-#define TIMER_SERIAL TIM13
+#define SW_SERIAL_TIMER_NUM 13
 #elif defined (TIM11_BASE)
-#define TIMER_SERIAL TIM11
+#define SW_SERIAL_TIMER_NUM 11
 #elif defined (TIM10_BASE)
-#define TIMER_SERIAL TIM10
+#define SW_SERIAL_TIMER_NUM 10
 #elif defined (TIM12_BASE)
-#define TIMER_SERIAL TIM12
+#define SW_SERIAL_TIMER_NUM 12
 #elif defined (TIM19_BASE)
-#define TIMER_SERIAL TIM19
+#define SW_SERIAL_TIMER_NUM 19
 #elif defined (TIM9_BASE)
-#define TIMER_SERIAL TIM9
+#define SW_SERIAL_TIMER_NUM 9
 #elif defined (TIM5_BASE)
-#define TIMER_SERIAL TIM5
+#define SW_SERIAL_TIMER_NUM 5
 #elif defined (TIM4_BASE)
-#define TIMER_SERIAL TIM4
+#define SW_SERIAL_TIMER_NUM 4
 #elif defined (TIM3_BASE)
-#define TIMER_SERIAL TIM3
+#define SW_SERIAL_TIMER_NUM 3
 #elif defined (TIM2_BASE)
-#define TIMER_SERIAL TIM2
+#define SW_SERIAL_TIMER_NUM 2
 #elif defined (TIM20_BASE)
-#define TIMER_SERIAL TIM20
+#define SW_SERIAL_TIMER_NUM 20
 #elif defined (TIM8_BASE)
-#define TIMER_SERIAL TIM8
+#define SW_SERIAL_TIMER_NUM 8
 #elif defined (TIM1_BASE)
-#define TIMER_SERIAL TIM1
+#define SW_SERIAL_TIMER_NUM 1
 #else
-#error No suitable timer found for SoftwareSerial, define TIMER_SERIAL in variant.h
+#error No suitable timer found for SoftwareSerial, define SW_SERIAL_TIMER_NUM in variant.h
 #endif
 #endif
 
-#define _SW_SERIAL_TIMER_IRQ(X) X##_IRQn
-#define SW_SERIAL_TIMER_IRQ _SW_SERIAL_TIMER_IRQ(TIMER_SERIAL)
+#ifndef SW_SERIAL_TIMER
+#define __SW_SERIAL_TIMER(X) TIM##X
+#define _SW_SERIAL_TIMER(X) __SW_SERIAL_TIMER(X)
+#define SW_SERIAL_TIMER _SW_SERIAL_TIMER(SW_SERIAL_TIMER_NUM)
+
+#define __SW_SERIAL_TIMER_IRQ(X) TIM##X##_IRQn
+#define _SW_SERIAL_TIMER_IRQ(X) __SW_SERIAL_TIMER_IRQ(X)
+#define SW_SERIAL_TIMER_IRQ _SW_SERIAL_TIMER_IRQ(SW_SERIAL_TIMER_NUM)
+#endif
 
 //
 // Statics
 //
-HardwareTimer SoftwareSerial::timer(TIMER_SERIAL);
+HardwareTimer SoftwareSerial::timer(SW_SERIAL_TIMER);
 SoftwareSerial *SoftwareSerial::active_listener = nullptr;
 SoftwareSerial *volatile SoftwareSerial::active_out = nullptr;
 SoftwareSerial *volatile SoftwareSerial::active_in = nullptr;
@@ -139,7 +159,9 @@ void SoftwareSerial::setSpeed(uint32_t speed)
       timer.setOverflow(cmp_value);
       timer.setCount(0);
       timer.attachInterrupt(&handleInterrupt);
-      NVIC_SetPriority(SW_SERIAL_TIMER_IRQ, NVIC_EncodePriority(0, INTERRUPT_PRIORITY, 0));
+#if defined(SW_SERIAL_TIMER_IRQ) && !defined(SW_SERIAL_NO_INT_PREEMPT)
+      NVIC_SetPriority(SW_SERIAL_TIMER_IRQ, NVIC_EncodePriority(0, SW_SERIAL_INT_PREEMPT_PRIORITY, 0));
+#endif
       timer.resume();
     } else {
       timer.detachInterrupt();
